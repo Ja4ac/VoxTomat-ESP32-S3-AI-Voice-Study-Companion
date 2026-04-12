@@ -461,7 +461,8 @@ esp_err_t tts_init(void)
 // 把调用方提供的文本提交给豆包 TTS，并把返回音频实时播放到功放。
 esp_err_t tts_speak_text(const char *text)
 {
-    esp_http_client_config_t http_cfg = {
+    esp_http_client_config_t http_cfg = 
+    {
         .url = TTS_API_URL,
         .method = HTTP_METHOD_POST,
         .timeout_ms = TTS_HTTP_TIMEOUT_MS,
@@ -474,32 +475,37 @@ esp_err_t tts_speak_text(const char *text)
     char request_id[40];
     char read_buffer[TTS_HTTP_READ_SIZE];
     int status_code = 0;
-    int header_ret = 0;
+    int headers = 0;
     esp_err_t err = ESP_OK;
 
-    if (text == NULL || text[0] == '\0') {
+    if (text == NULL || text[0] == '\0') 
+    {
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (strlen(text) > TTS_MAX_TEXT_BYTES) {
+    if (strlen(text) > TTS_MAX_TEXT_BYTES) 
+    {
         ESP_LOGE(TAG, "Input text is too long, max bytes: %d", TTS_MAX_TEXT_BYTES);
         return ESP_ERR_INVALID_SIZE;
     }
 
     err = tts_init();
-    if (err != ESP_OK) {
+    if (err != ESP_OK) 
+    {
         return err;
     }
 
     err = tts_build_request_body(text, &request_body);
-    if (err != ESP_OK) {
+    if (err != ESP_OK) 
+    {
         return err;
     }
 
     tts_make_request_id(request_id);
 
     client = esp_http_client_init(&http_cfg);
-    if (client == NULL) {
+    if (client == NULL) 
+    {
         cJSON_free(request_body);
         return ESP_FAIL;
     }
@@ -512,51 +518,61 @@ esp_err_t tts_speak_text(const char *text)
     esp_http_client_set_header(client, "X-Api-Request-Id", request_id);
 
     err = esp_http_client_open(client, strlen(request_body));
-    if (err != ESP_OK) {
+    if (err != ESP_OK) 
+    {
         ESP_LOGE(TAG, "Failed to open TTS HTTP connection: %s", esp_err_to_name(err));
         goto cleanup;
     }
 
-    if (esp_http_client_write(client, request_body, strlen(request_body)) < 0) {
+    if (esp_http_client_write(client, request_body, strlen(request_body)) < 0) 
+    {
         ESP_LOGE(TAG, "Failed to write TTS request body");
         err = ESP_FAIL;
         goto cleanup;
     }
 
-    header_ret = esp_http_client_fetch_headers(client);
+    headers = esp_http_client_fetch_headers(client);
     status_code = esp_http_client_get_status_code(client);
-    if (header_ret < 0) {
-        ESP_LOGW(TAG, "Failed to fetch TTS headers, ret=%d", header_ret);
+    if (headers < 0) 
+    {
+        ESP_LOGW(TAG, "Failed to fetch TTS headers: %d", headers);
     }
-    if (status_code != 200) {
+    if (status_code != 200) 
+    {
         ESP_LOGE(TAG, "TTS request failed with status: %d", status_code);
         tts_log_error_response(client);
         err = ESP_FAIL;
         goto cleanup;
     }
 
-    while (!parser.finished) {
+    while (!parser.finished) 
+    {
         int read_len = esp_http_client_read(client, read_buffer, sizeof(read_buffer));
-        if (read_len == 0) {
+        if (read_len == 0) 
+        {
             break;
         }
-        if (read_len == -ESP_ERR_HTTP_EAGAIN) {
+        if (read_len == -ESP_ERR_HTTP_EAGAIN) 
+        {
             continue;
         }
-        if (read_len < 0) {
+        if (read_len < 0) 
+        {
             ESP_LOGE(TAG, "Failed to read TTS stream: %d", read_len);
             err = ESP_FAIL;
             goto cleanup;
         }
 
         err = tts_feed_sse_bytes(&parser, read_buffer, read_len);
-        if (err != ESP_OK) {
+        if (err != ESP_OK) 
+        {
             ESP_LOGE(TAG, "Failed to parse TTS stream: %s", esp_err_to_name(err));
             goto cleanup;
         }
     }
 
-    if (!parser.finished) {
+    if (!parser.finished) 
+    {
         ESP_LOGE(TAG, "TTS stream ended before finish event arrived");
         err = ESP_FAIL;
     }
@@ -564,8 +580,8 @@ esp_err_t tts_speak_text(const char *text)
 cleanup:
     tts_deinit_parser(&parser);
     cJSON_free(request_body);
-    if (client != NULL) {
-        esp_http_client_close(client);
+    if (client != NULL) 
+    {
         esp_http_client_cleanup(client);
     }
     return err;

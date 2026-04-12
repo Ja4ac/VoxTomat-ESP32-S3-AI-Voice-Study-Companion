@@ -12,7 +12,7 @@ static const char *TAG = "ASR";
 static char *s_access_token = NULL;
 
 // 从 HTTP 客户端读取完整响应体到动态分配的缓冲区
-static esp_err_t asr_http_read(esp_http_client_handle_t esp_http_client, char **buffer, int content_length)
+static esp_err_t asr_http_read(esp_http_client_handle_t http_client, char **buffer, int content_length)
 {
     // content_length 为 0 时不一定没数据，可能只是服务端没带长度
     int buffer_size = (content_length > 0 ) ? content_length + 1 : 4096;
@@ -26,7 +26,7 @@ static esp_err_t asr_http_read(esp_http_client_handle_t esp_http_client, char **
     int total_read = 0;
     while(total_read < buffer_size - 1)
     {
-        int current_read = esp_http_client_read(esp_http_client, *buffer + total_read, buffer_size -1 - total_read);
+        int current_read = esp_http_client_read(http_client, *buffer + total_read, buffer_size -1 - total_read);
         if(current_read < 0)
         {
             free(*buffer);
@@ -50,9 +50,10 @@ static esp_err_t asr_http_read(esp_http_client_handle_t esp_http_client, char **
 static bool asr_get_baidu_access_token(void)
 {
     esp_err_t err;
+    esp_http_client_handle_t http_client = NULL;
     char *new_token = NULL;             // 存放取得的新的access_token
     char url[512];                      // 拼接url
-    int content_length;                 // http服务器返回的响应头长度
+    int headers;                 // http服务器返回的响应头长度
     int status_code;                    // http服务器返回的状态码
     char *buffer;                       // http服务器返回的数据
     cJSON *root;                        // 将http服务器返回的数据解析为JSON
@@ -80,7 +81,7 @@ static bool asr_get_baidu_access_token(void)
         .buffer_size = 4096,
     };
 
-    esp_http_client_handle_t http_client = esp_http_client_init(&http_client_config);
+    http_client = esp_http_client_init(&http_client_config);
     if(http_client == NULL)
     {
         return false;
@@ -97,10 +98,10 @@ static bool asr_get_baidu_access_token(void)
         return false;
     }
 
-    content_length = esp_http_client_fetch_headers(http_client);
+    headers = esp_http_client_fetch_headers(http_client);
     status_code = esp_http_client_get_status_code(http_client);
-    ESP_LOGI(TAG, "HTTP status: %d, content length: %d", status_code, content_length);
-    if(content_length < 0)
+    ESP_LOGI(TAG, "HTTP status: %d, content length: %d", status_code, headers);
+    if(headers < 0)
     {
         ESP_LOGE(TAG, "Failed to get content length");
         esp_http_client_cleanup(http_client);
@@ -113,7 +114,7 @@ static bool asr_get_baidu_access_token(void)
         return false;
     }
 
-    err = asr_http_read(http_client, &buffer, content_length);
+    err = asr_http_read(http_client, &buffer, headers);
     esp_http_client_cleanup(http_client);
     if(err != ESP_OK)
     {
@@ -208,7 +209,8 @@ esp_err_t asr_record_audio(int16_t *audio_data,int *audio_bytes)
 char *asr_recognize(void)
 {
     esp_err_t err;
-    int16_t *audio_data;            // 从MIC读取的音频数据
+    esp_http_client_handle_t http_client = NULL;
+    int16_t *audio_data = NULL;            // 从MIC读取的音频数据
     int audio_bytes;                // 音频数据长度
     char url[512];                  // 拼接url
     int written;                    // 向http服务器一次写入的字节
@@ -217,8 +219,8 @@ char *asr_recognize(void)
     int status_code;                // http服务器发送的状态码
     char *result = NULL;            // 语音识别结果
     int result_arr_size;            // 存储识别结果的数组大小
-    char *response;                 // http发送的数据
-    cJSON *root;                    // 将http发送的数据解析为JSON
+    char *response = NULL;                 // http发送的数据
+    cJSON *root = NULL;                    // 将http发送的数据解析为JSON
     cJSON *err_no;                  // 是否有错误
     cJSON *err_msg;                 // 错误信息
     cJSON *result_arr;              // 存储识别结果的数组
@@ -240,14 +242,13 @@ char *asr_recognize(void)
     if(audio_data == NULL)
     {
         ESP_LOGE(TAG, "Failed to allocate audio data buffer");
-        return NULL;
+        goto cleanup;
     }
     
     err = asr_record_audio(audio_data, &audio_bytes);
     if(err != ESP_OK)
     {
-        free(audio_data);
-        return NULL;
+        goto cleanup;
     }
 
     // 百度接口要求把 token 和音频长度一起带进 URL
@@ -262,11 +263,11 @@ char *asr_recognize(void)
         .crt_bundle_attach = esp_crt_bundle_attach,
         .buffer_size = 4096,
     };
-    esp_http_client_handle_t http_client = esp_http_client_init(&http_client_config);
+    http_client = esp_http_client_init(&http_client_config);
     if(http_client == NULL)
     {
-        free(audio_data);
-        return NULL;
+        err = ESP_FAIL;
+        goto cleanup;
     }
     esp_http_client_set_header(http_client, "Content-Type", "audio/pcm; rate=16000");
 
@@ -275,9 +276,7 @@ char *asr_recognize(void)
     if(err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
-        free(audio_data);
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
 
     written = -1;
@@ -289,9 +288,8 @@ char *asr_recognize(void)
         if(written == -1)
         {
             ESP_LOGE(TAG, "Failed to write audio data");
-            esp_http_client_cleanup(http_client);
-            free(audio_data);
-            return NULL;
+            err = ESP_FAIL;
+            goto cleanup;
         }
         total_written += written;
     }
@@ -304,90 +302,91 @@ char *asr_recognize(void)
     if(content_length < 0)
     {
         ESP_LOGE(TAG, "Failed to fetch headers");
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
     if(status_code != 200)
     {
         ESP_LOGE(TAG, "Recoginize request failed with status: %d", status_code);
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
 
     err = asr_http_read(http_client, &response, content_length);
     if(err != ESP_OK)
     {
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
 
     root = cJSON_Parse(response);
     if(root == NULL)
     {
         ESP_LOGE(TAG, "Failed to parse json");
-        free(response);
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
     err_no = cJSON_GetObjectItem(root, "err_no");
     err_msg = cJSON_GetObjectItem(root, "err_msg");
     if(err_no == NULL || err_no -> valueint != 0)
     {
+        // 这里是业务错误，不是 HTTP/TLS 错误；token 过期通常也会走到这里
         ESP_LOGE(TAG, "Failed to get err_no, err_no: %d, err_msg: %s", 
                                              err_no ? err_no ->valueint : -1,
                                              err_msg ? err_msg -> valuestring : "unknown");
-        // 这里是业务错误，不是 HTTP/TLS 错误；token 过期通常也会走到这里
-        cJSON_Delete(root);
-        free(response);
-        esp_http_client_cleanup(http_client);
         if(err_no -> valueint == 110 || err_no ->valueint == 111)
         {
             ESP_LOGW(TAG, "Access token expired, retrieve it again");
             asr_get_baidu_access_token();
         }
-        return NULL;
+        
+        goto cleanup;
     }
     result_arr = cJSON_GetObjectItem(root, "result");
     if(result_arr == NULL || !cJSON_IsArray(result_arr))
     {
         ESP_LOGE(TAG, "Failed to get result_arr");
-        cJSON_Delete(root);
-        free(response);
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
     result_arr_size = cJSON_GetArraySize(result_arr);
     ESP_LOGI(TAG, "result array size: %d", result_arr_size);
     if(result_arr_size <= 0)
     {
         ESP_LOGE(TAG, "Result_arr size empty");
-        cJSON_Delete(root);
-        free(response);
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
     // 百度返回的是字符串数组，这里只取第 0 个识别结果
     result_context = cJSON_GetArrayItem(result_arr, 0);
     if(result_context == NULL)
     {
         ESP_LOGE(TAG, "Failed to get array item");
-        cJSON_Delete(root);
-        free(response);
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
     result = strdup(result_context -> valuestring);
     if(result == NULL)
     {
         ESP_LOGE(TAG, "Failed to strdup result");
-        cJSON_Delete(root);
-        free(response);
-        esp_http_client_cleanup(http_client);
-        return NULL;
+        goto cleanup;
     }
     ESP_LOGI(TAG, "Recognition: %s", result);
     cJSON_Delete(root);
     free(response);
     esp_http_client_cleanup(http_client);
     return result;
+
+    cleanup:
+        if(audio_data != NULL)
+        {
+            free(audio_data);
+            audio_data = NULL;
+        }
+        if(root != NULL)
+        {
+            cJSON_Delete(root);
+        }
+        if(response != NULL)
+        {
+            free(response);
+        }
+        if(http_client != NULL)
+        {
+            esp_http_client_cleanup(http_client);
+        }
+        return NULL;
 }

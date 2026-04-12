@@ -1,13 +1,15 @@
 set(src_dirs
         TTS
         ASR
-        WIFI)
+        WIFI
+        LLM)
 
 set(include_dirs
         .
         TTS
         ASR
-        WIFI)
+        WIFI
+        LLM)
 
 set(requires
         driver
