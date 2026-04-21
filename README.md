@@ -181,8 +181,8 @@ flowchart LR
 
 ### 原理图
 ![图页1](./pictures/schematic/SCH_Schematic1_1-P1.png)
-![图页2](./pictures/schematic/SCH_Schematic1_2-TPS63020-P1.png)
-![图页3](./pictures/schematic/SCH_Schematic1_3-BQ24075-P1.png)
+![图页2](./pictures/schematic/SCH_Schematic1_2-TPS63020.png)
+![图页3](./pictures/schematic/SCH_Schematic1_3-BQ24075.png)
 
 ### PCB 设计
 ![PCB Top](./pictures/pcb/PCB_VoxTomat_top.png)
