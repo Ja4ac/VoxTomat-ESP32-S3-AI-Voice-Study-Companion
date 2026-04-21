@@ -27,3 +27,15 @@
 - 修改 `CMakeLists.txt`配置文本
 - 更新 `README.md`
 
+## v1.3.0 - 2026-04-21
+
+### Added
+- 新增 `SPI` `LCD` 模块，实现显示屏的显示
+- 新增 `LVGL` 组件
+- 新增 `UI` `LV_DRIVER` 模块，实现 `LVGL` 的移植，并绘制了UI
+- 新增 原理图、PCB、实物图
+
+### Improved
+- 优化 项目结构
+- 更新 `README.md`
+

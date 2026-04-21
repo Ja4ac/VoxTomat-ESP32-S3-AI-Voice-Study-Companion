@@ -1,11 +1,21 @@
 set(src_dirs
-        I2S)
+        I2S
+        SPI
+        LV_DRIVER
+        LCD
+        UI)
 
 set(include_dirs
-        I2S)
+        I2S
+        SPI
+        LV_DRIVER
+        LCD
+        UI)
 
 set(requires
-        driver)
+        driver
+        esp_timer
+        lvgl__lvgl)
 
 idf_component_register(SRC_DIRS "${src_dirs}"
                        INCLUDE_DIRS "${include_dirs}"

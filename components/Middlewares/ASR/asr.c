@@ -54,10 +54,10 @@ static bool asr_get_baidu_access_token(void)
     esp_http_client_handle_t http_client = NULL;
     char *new_token = NULL;             // 存放取得的新的access_token
     char url[512];                      // 拼接url
-    int headers;                 // http服务器返回的响应头长度
+    int headers;                        // http服务器返回的响应头长度
     int status_code;                    // http服务器返回的状态码
-    char *buffer = NULL;                       // http服务器返回的数据
-    cJSON *root = NULL;                        // 将http服务器返回的数据解析为JSON
+    char *buffer = NULL;                // http服务器返回的数据
+    cJSON *root = NULL;                 // 将http服务器返回的数据解析为JSON
     cJSON *token;                       // 存放新s_access_token
     cJSON *error;                       // 存放错误
     cJSON *error_desc;                  // 存放错误信息

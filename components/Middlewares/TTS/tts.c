@@ -48,6 +48,7 @@ static uint8_t *s_tts_pcm_storage = NULL;
 static TaskHandle_t task_tts_play_handle = NULL;
 static void task_tts_play(void *pvParameters);
 
+// 定义 SSE 解析器
 typedef struct 
 {
     int current_event_id;                 // 当前正在组装的 SSE 事件 ID。
@@ -165,7 +166,11 @@ static esp_err_t tts_pcm_buffer_copy(uint8_t *pcm, size_t pcm_len)
                                           pcm_len - sent, pdMS_TO_TICKS(100));
         if(chunk == 0)
         {
-            if(s_tts_stop_request) { free(pcm); return ESP_FAIL; }
+            if(s_tts_stop_request) 
+            { 
+                free(pcm); 
+                return ESP_FAIL; 
+            }
             continue;
         }
         sent += chunk;
@@ -178,7 +183,7 @@ static esp_err_t tts_pcm_buffer_copy(uint8_t *pcm, size_t pcm_len)
 // tts pcm播放任务
 static void task_tts_play(void *pvParameters)
 {
-    uint8_t *play_buf = heap_caps_malloc(PLAY_BUF_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    uint8_t *play_buf = heap_caps_malloc(PLAY_BUF_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);     // 从内部RAM分配内存，按字节寻址
     if(play_buf == NULL)
     {
         ESP_LOGE(TAG, "Failed to malloc play buffer");
@@ -393,7 +398,7 @@ static esp_err_t tts_process_sse_line(tts_sse_parser_t *parser, char *line)
         return ESP_OK;
     }
 
-    // 写入音频数据
+    // 拼接音频数据
     if (strncmp(line, "data:", 5) == 0) 
     {
         value = tts_skip_spaces(line + 5);
@@ -417,7 +422,7 @@ static esp_err_t tts_feed_sse_bytes(tts_sse_parser_t *parser, const char *data, 
     for (size_t i = 0; i < data_len; ++i) 
     {
         char ch = data[i];
-        // 一行结束了，SSE里下一行会是空行\r\r，将第一个\r换成\0作为进入tts_process_sse_message(parser)的标志
+        // \r\n标志一行结束了
         if (ch == '\n') 
         {
             if (parser->line_len > 0 && parser->line_buf[parser->line_len - 1] == '\r')
@@ -502,13 +507,13 @@ static esp_err_t tts_build_request_body(const char *text, char **body_out)
 }
 
 // 读取错误响应体，便于打印出服务端返回的错误详情
-static void tts_log_error_response(esp_http_client_handle_t client)
+static void tts_log_error_response(esp_http_client_handle_t http_client)
 {
     char buffer[256];
     int read_len = 0;
 
     memset(buffer, 0, sizeof(buffer));
-    read_len = esp_http_client_read(client, buffer, sizeof(buffer) - 1);
+    read_len = esp_http_client_read(http_client, buffer, sizeof(buffer) - 1);
     if (read_len > 0) 
     {
         buffer[read_len] = '\0';
@@ -593,25 +598,26 @@ esp_err_t tts_init(void)
     return ESP_OK;
 }
 
-// 把调用方提供的文本提交给豆包 TTS，并把返回音频实时播放到功放
+// 把 LLM 提供的文本提交给豆包 TTS，并把返回音频实时播放到功放
 esp_err_t tts_speak_text(const char *text)
 {
-    esp_http_client_handle_t client = NULL;
+    esp_http_client_handle_t http_client = NULL;
     tts_sse_parser_t parser = {0};
     char *request_body = NULL;
-    char request_id[40];
-    char read_buffer[TTS_HTTP_READ_SIZE];
-    int status_code = 0;
-    int headers = 0;
+    char request_id[40];                            // 请求id
+    char read_buffer[TTS_HTTP_READ_SIZE];           // 存放http返回的数据
+    int status_code = 0;                            // http服务器返回的状态码
+    int headers = 0;                                // http服务器返回的响应头长度
     esp_err_t err = ESP_OK;
-    bool tts_play_task_created = false;
+    bool tts_play_task_created = false;             // 标记播放任务是否创建
 
     if (text == NULL || text[0] == '\0') 
     {
+        ESP_LOGE(TAG, "LLM returned text is illegal");
         err =  ESP_ERR_INVALID_ARG;
         goto cleanup;
     }
-    if (strlen(text) > TTS_MAX_TEXT_BYTES)
+    if (strlen(text) > TTS_MAX_TEXT_BYTES)          // LLM 返回的文本超过最大定义的文本长度
     {
         ESP_LOGE(TAG, "Input text is too long, max bytes: %d", TTS_MAX_TEXT_BYTES);
         err = ESP_ERR_INVALID_SIZE;
@@ -626,7 +632,7 @@ esp_err_t tts_speak_text(const char *text)
 
     tts_pcm_copy_init();
 
-    esp_http_client_config_t http_cfg = 
+    esp_http_client_config_t http_client_config = 
     {
         .url = TTS_API_URL,
         .method = HTTP_METHOD_POST,
@@ -635,29 +641,32 @@ esp_err_t tts_speak_text(const char *text)
         .buffer_size = 8192,
     };
     
+    // 构造请求体
     err = tts_build_request_body(text, &request_body);
     if (err != ESP_OK) 
     {
         goto cleanup;
     }
 
+    // 生成请求ID
     tts_make_request_id(request_id);
 
-    client = esp_http_client_init(&http_cfg);
-    if (client == NULL) 
+    http_client = esp_http_client_init(&http_client_config);
+    if (http_client == NULL) 
     {
         err = ESP_FAIL;
         goto cleanup;
     }
 
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_header(client, "Accept", "text/event-stream");
-    esp_http_client_set_header(client, "X-Api-App-Id", TTS_APP_ID);
-    esp_http_client_set_header(client, "X-Api-Access-Key", TTS_ACCESS_KEY);
-    esp_http_client_set_header(client, "X-Api-Resource-Id", TTS_RESOURCE_ID);
-    esp_http_client_set_header(client, "X-Api-Request-Id", request_id);
+    // 设置请求头
+    esp_http_client_set_header(http_client, "Content-Type", "application/json");
+    esp_http_client_set_header(http_client, "Accept", "text/event-stream");
+    esp_http_client_set_header(http_client, "X-Api-App-Id", TTS_APP_ID);
+    esp_http_client_set_header(http_client, "X-Api-Access-Key", TTS_ACCESS_KEY);
+    esp_http_client_set_header(http_client, "X-Api-Resource-Id", TTS_RESOURCE_ID);
+    esp_http_client_set_header(http_client, "X-Api-Request-Id", request_id);
 
-    err = esp_http_client_open(client, strlen(request_body));
+    err = esp_http_client_open(http_client, strlen(request_body));
     if (err != ESP_OK) 
     {
         ESP_LOGE(TAG, "Failed to open TTS HTTP connection: %s", esp_err_to_name(err));
@@ -665,7 +674,7 @@ esp_err_t tts_speak_text(const char *text)
     }
     ESP_LOGI(TAG, "open TTS HTTP connection");
 
-    if (esp_http_client_write(client, request_body, strlen(request_body)) < 0) 
+    if (esp_http_client_write(http_client, request_body, strlen(request_body)) < 0) 
     {
         ESP_LOGE(TAG, "Failed to write TTS request body");
         err = ESP_FAIL;
@@ -673,8 +682,8 @@ esp_err_t tts_speak_text(const char *text)
     }
     ESP_LOGI(TAG, "write TTS request body");
 
-    headers = esp_http_client_fetch_headers(client);
-    status_code = esp_http_client_get_status_code(client);
+    headers = esp_http_client_fetch_headers(http_client);
+    status_code = esp_http_client_get_status_code(http_client);
     if (headers < 0) 
     {
         ESP_LOGW(TAG, "Failed to fetch TTS headers: %d", headers);
@@ -683,12 +692,13 @@ esp_err_t tts_speak_text(const char *text)
     if (status_code != 200) 
     {
         ESP_LOGE(TAG, "TTS request failed with status: %d", status_code);
-        tts_log_error_response(client);
+        tts_log_error_response(http_client);
         err = ESP_FAIL;
         goto cleanup;
     }
-    ESP_LOGI(TAG, "TTS request with status: %d", status_code                                                                                                                                 );
+    ESP_LOGI(TAG, "TTS request with status: %d", status_code);
 
+    // 创建播放任务
     BaseType_t ok = xTaskCreate(
         (TaskFunction_t)task_tts_play,
         "task_tts_play",
@@ -703,11 +713,11 @@ esp_err_t tts_speak_text(const char *text)
         err = ESP_FAIL;
         goto cleanup;
     }
-    tts_play_task_created = true;
+    tts_play_task_created = true;           // 标志播放任务创建成功
 
     while (!parser.finished) 
     {
-        int read_len = esp_http_client_read(client, read_buffer, sizeof(read_buffer));
+        int read_len = esp_http_client_read(http_client, read_buffer, sizeof(read_buffer));
         if (read_len == 0) 
         {
             break;
@@ -757,10 +767,10 @@ cleanup:
         cJSON_free(request_body);
         request_body = NULL;
     }
-    if (client != NULL) 
+    if (http_client != NULL) 
     {
-        esp_http_client_cleanup(client);
-        client = NULL;
+        esp_http_client_cleanup(http_client);
+        http_client = NULL;
     }
 
     return err;

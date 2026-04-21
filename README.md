@@ -1,4 +1,4 @@
-# 基于 ESP32-S3 的 AI 语音学习终端（ESP32-S3 AI Voice Study Companion）
+# VoxTomat-基于 ESP32-S3 的 AI 语音学习终端（ESP32-S3 AI Voice Study Companion）
 
 > 设备形态：桌面式 AI 学习终端 / 智能番茄钟
 
@@ -82,7 +82,7 @@
 本仓库当前的软件架构如下：
 
 ```text
-AI_Voice_Study_Companion
+VoxTomat
 ├─ main
 │  ├─ main.c                     # 应用入口、任务创建、队列组织
 ├─ components
@@ -167,7 +167,8 @@ flowchart LR
 
 - 接入 `DeepSeek` 完成自然语言对话与命令分类 （已完成）
 - 部署 `ESP-SR` 与 `VAD`，减少无效上传、优化交互体验 （已完成）
-- 扩展 `SPI` 屏幕界面，实现番茄钟、日程与学习状态展示
+- 扩展 `SPI` 屏幕界面，移植 `LVGL` ，实现UI界面 （已完成）
+- 完成 `LVGL` 与系统的交互，实现番茄钟、日程与学习状态展示
 
 ### 8. 项目优化与整机收尾（开发中）
 
@@ -175,6 +176,20 @@ flowchart LR
 - 优化语音链路时延、音量、错误重试与网络异常处理
 - 完成结构外壳设计与 3D 打印装配
 - 形成可展示的整机 Demo、项目文档与答辩材料
+
+## 硬件设计与实物展示
+
+### 原理图
+![图页1](./pictures/schematic/SCH_Schematic1_1-P1.png)
+![图页2](./pictures/schematic/SCH_Schematic1_2-TPS63020-P1.png)
+![图页3](./pictures/schematic/SCH_Schematic1_3-BQ24075-P1.png)
+
+### PCB 设计
+![PCB Top](./pictures/pcb/PCB_VoxTomat_top.png)
+![PCB Bottom](./pictures/pcb/PCB_VoxTomat_bottom.png)
+
+### 实物展示
+![上电效果](./pictures/image/image1.jpg)
 
 ## 仓库使用说明
 

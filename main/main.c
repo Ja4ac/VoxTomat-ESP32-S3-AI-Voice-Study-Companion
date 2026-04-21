@@ -10,6 +10,7 @@
 #include "sr_engine.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "lvgl_port.h"
 
 static const char *TAG = "APP";
 
@@ -23,6 +24,8 @@ static QueueHandle_t s_xQueue_asr_to_llm;
 static QueueHandle_t s_xQueue_llm_to_tts;
 static QueueHandle_t s_xQueue_sr_event;
 static QueueHandle_t s_xQueue_sr_event_to_asr;
+
+#define APP_JTAG_SAFE_BOOT_DELAY_MS 2000
 
 // 任务 ASR 配置
 #define TASK_ASR_STACK 8192
@@ -52,7 +55,15 @@ static void task_sr_event(void *pvParameters);
 
 void app_main(void)
 {
+    ESP_LOGI(TAG, "Version: 1.3.0");
     esp_err_t err;
+
+    /*
+     * Leave a short attach window after reset so OpenOCD/JTAG can halt the chip
+     * before SPI/LCD/LVGL/PSRAM related activity starts ramping up.
+     */
+    // ESP_LOGI(TAG, "JTAG safe boot delay: %d ms", APP_JTAG_SAFE_BOOT_DELAY_MS);
+    // vTaskDelay(pdMS_TO_TICKS(APP_JTAG_SAFE_BOOT_DELAY_MS));
 
     s_xQueue_asr_to_llm = xQueueCreate(3, sizeof (char*));
     s_xQueue_llm_to_tts = xQueueCreate(3, sizeof (char*));
@@ -87,7 +98,9 @@ void app_main(void)
 
 static esp_err_t app_init(void)
 {
-    esp_err_t err = i2s_mic_init();
+    esp_err_t err;
+
+    err = i2s_mic_init();
     if (err != ESP_OK) 
     {
         ESP_LOGE(TAG, "Failed to init MIC: %s", esp_err_to_name(err));
@@ -118,6 +131,13 @@ static esp_err_t app_init(void)
         return err;
     }
 
+    err = lvgl_port_init();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to init LVGL: %s", esp_err_to_name(err));
+        return err;
+    }
+    
     return ESP_OK;
 }
 
