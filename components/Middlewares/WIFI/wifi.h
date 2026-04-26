@@ -1,5 +1,5 @@
-#ifndef __WIFI_H_
-#define __WIFI_H_
+#ifndef WIFI_H_
+#define WIFI_H_
 
 #include "freertos/FreeRTOS.h"
 #include "project_secrets.h"

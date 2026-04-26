@@ -1,5 +1,5 @@
-#ifndef __SR_EVENT_H_
-#define __SR_EVENT_H_
+#ifndef SR_EVENT_H_
+#define SR_EVENT_H_
 
 #include "esp_err.h"
 

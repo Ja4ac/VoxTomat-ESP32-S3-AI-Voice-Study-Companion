@@ -1,5 +1,5 @@
-#ifndef __SR_SESSION_H_
-#define __SR_SESSION_H_
+#ifndef SR_SESSION_H_
+#define SR_SESSION_H_
 
 #include "esp_err.h"
 

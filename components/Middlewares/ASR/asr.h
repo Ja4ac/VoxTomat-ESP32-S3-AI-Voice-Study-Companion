@@ -1,5 +1,5 @@
-#ifndef __ASR_H_
-#define __ASR_H_
+#ifndef ASR_H_
+#define ASR_H_
 
 #include "esp_err.h"
 #include "project_secrets.h"

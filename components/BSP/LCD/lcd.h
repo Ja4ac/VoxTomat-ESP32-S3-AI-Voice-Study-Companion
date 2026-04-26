@@ -1,5 +1,5 @@
-#ifndef __LCD_H__
-#define __LCD_H__
+#ifndef LCD_H__
+#define LCD_H__
 
 #include "SPI.h"
 #include <stdint.h>

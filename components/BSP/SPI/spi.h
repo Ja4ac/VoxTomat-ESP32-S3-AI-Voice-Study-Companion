@@ -1,5 +1,5 @@
-#ifndef __SPI_H_
-#define __SPI_H_
+#ifndef SPI_H_
+#define SPI_H_
 
 #include "driver/gpio.h"
 #include "driver/spi_master.h"

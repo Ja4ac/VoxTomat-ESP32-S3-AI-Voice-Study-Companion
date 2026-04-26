@@ -1,5 +1,5 @@
-#ifndef __SR_MODEL_H_
-#define __SR_MODEL_H_
+#ifndef SR_MODEL_H_
+#define SR_MODEL_H_
 
 #include "esp_afe_config.h"
 #include "esp_afe_sr_iface.h"

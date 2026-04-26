@@ -1,5 +1,5 @@
-#ifndef __SR_ENGINE_H_
-#define __SR_ENGINE_H_
+#ifndef SR_ENGINE_H_
+#define SR_ENGINE_H_
 
 #include "sr_event.h"
 #include "sr_model.h"

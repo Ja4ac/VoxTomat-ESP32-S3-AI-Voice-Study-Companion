@@ -12,6 +12,8 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
+static const char *TAG = "WIFI";
+
 // 回调里置位，wifi_sta_connect() 里等待这些位
 static bool s_wifi_connected = false;
 static bool s_wifi_initialized = false;
@@ -21,7 +23,6 @@ static EventGroupHandle_t s_wifi_event_group = NULL;
 static esp_netif_t *s_sta_netif = NULL;
 static esp_event_handler_instance_t s_instance_any_id;
 static esp_event_handler_instance_t s_instance_got_ip;
-static const char *TAG = "WIFI";
 
 // wifi/IP事件回调，处理三种事件：
 // STA_START：日志记录

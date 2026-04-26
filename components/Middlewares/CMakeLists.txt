@@ -3,7 +3,9 @@ set(src_dirs
         ASR
         WIFI
         LLM
-        SR)
+        SR
+        DATE
+        SCHEDULE)
 
 set(include_dirs
         .
@@ -11,7 +13,9 @@ set(include_dirs
         ASR
         WIFI
         LLM
-        SR)
+        SR
+        DATE
+        SCHEDULE)
 
 set(requires
         driver
@@ -24,10 +28,11 @@ set(requires
         nvs_flash
         mbedtls
         esp_timer
-        espressif__esp-sr)
+        espressif__esp-sr
+        esp_timer)
 
-idf_component_register(SRC_DIRS "${src_dirs}"
-                       INCLUDE_DIRS "${include_dirs}"
-                       REQUIRES "${requires}")
+idf_component_register(SRC_DIRS ${src_dirs}
+                       INCLUDE_DIRS ${include_dirs}
+                       REQUIRES ${requires})
 
 component_compile_options(-ffast-math -O3 -Wno-error=format -Wno-format)

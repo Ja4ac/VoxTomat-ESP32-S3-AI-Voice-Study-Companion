@@ -1,5 +1,5 @@
-#ifndef __I2S_H_
-#define __I2S_H_
+#ifndef I2S_H_
+#define I2S_H_
 
 #include "esp_err.h"
 #include "driver/gpio.h"

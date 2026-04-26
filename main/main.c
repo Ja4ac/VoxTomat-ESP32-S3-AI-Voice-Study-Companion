@@ -4,9 +4,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "i2s.h"
+#include "date.h"
+#include "app.h"
 #include "asr.h"
 #include "tts.h"
 #include "llm.h"
+#include "schedule.h"
 #include "sr_engine.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -20,29 +23,28 @@ static void app_start_tasks(void);
 static sr_engine_t s_sr_engine;
 static sr_event_t s_sr_event;
 
-static QueueHandle_t s_xQueue_asr_to_llm;
-static QueueHandle_t s_xQueue_llm_to_tts;
-static QueueHandle_t s_xQueue_sr_event;
-static QueueHandle_t s_xQueue_sr_event_to_asr;
-
-#define APP_JTAG_SAFE_BOOT_DELAY_MS 2000
+static QueueHandle_t s_queue_asr_to_llm;
+static QueueHandle_t s_queue_llm_to_tts;
+static QueueHandle_t s_queue_sr_event;
+static QueueHandle_t s_queue_sr_event_to_asr;
+static QueueHandle_t s_queue_schedule_changed;
 
 // 任务 ASR 配置
 #define TASK_ASR_STACK 8192
 #define TASK_ASR_PRIORITY 1
-static TaskHandle_t task_asr_handle = NULL;
+static TaskHandle_t s_task_asr_handle = NULL;
 static void task_asr(void *pvParameters);
 
 // 任务 LLM 配置
 #define TASK_LLM_STACK 8192
 #define TASK_LLM_PRIORITY 1
-static TaskHandle_t task_llm_handle = NULL;
+static TaskHandle_t s_task_llm_handle = NULL;
 static void task_llm(void *pvParameters);
 
 // 任务 TTS 配置
 #define TASK_TTS_STACK 12288
 #define TASK_TTS_PRIORITY 1
-static TaskHandle_t task_tts_handle = NULL;
+static TaskHandle_t s_task_tts_handle = NULL;
 static void task_tts(void *pvParameters);
 
 // 任务 SR配置存放在sr_engine中
@@ -50,8 +52,20 @@ static void task_tts(void *pvParameters);
 // 任务 SR_EVENT 配置
 #define TASK_SR_EVENT_STACK 2048
 #define TASK_SR_EVENT_PRIORITY 1
-static TaskHandle_t task_sr_event_handle = NULL;
+static TaskHandle_t s_task_sr_event_handle = NULL;
 static void task_sr_event(void *pvParameters);
+
+// 任务 APP_TIME_UPDATE 配置
+#define TASK_APP_TIME_UPDATE_STACK 8192
+#define TASK_APP_TIME_UPDATE_PRIORITY 1
+static TaskHandle_t s_task_app_time_update_handle = NULL;
+static void task_app_time_update(void *pvParameters);
+
+// 任务 SCHEDULE_UPDATE 配置
+#define TASK_SCHEDULE_UPDATE_STACK 2048
+#define TASK_SCHEDULE_UPDATE_PRIORITY 1
+static TaskHandle_t s_task_schedule_update_handle = NULL;
+static void task_schedule_update(void *pvParameters);
 
 void app_main(void)
 {
@@ -65,11 +79,12 @@ void app_main(void)
     // ESP_LOGI(TAG, "JTAG safe boot delay: %d ms", APP_JTAG_SAFE_BOOT_DELAY_MS);
     // vTaskDelay(pdMS_TO_TICKS(APP_JTAG_SAFE_BOOT_DELAY_MS));
 
-    s_xQueue_asr_to_llm = xQueueCreate(3, sizeof (char*));
-    s_xQueue_llm_to_tts = xQueueCreate(3, sizeof (char*));
-    s_xQueue_sr_event = xQueueCreate(3, sizeof(sr_event_t));
-    s_xQueue_sr_event_to_asr = xQueueCreate(3, sizeof (sr_event_t));
-    if(s_xQueue_asr_to_llm == NULL || s_xQueue_llm_to_tts == NULL || s_xQueue_sr_event == NULL || s_xQueue_sr_event_to_asr == NULL)
+    s_queue_asr_to_llm = xQueueCreate(3, sizeof (char*));
+    s_queue_llm_to_tts = xQueueCreate(3, sizeof (char*));
+    s_queue_sr_event = xQueueCreate(3, sizeof(sr_event_t));
+    s_queue_sr_event_to_asr = xQueueCreate(3, sizeof (sr_event_t));
+    s_queue_schedule_changed = xQueueCreate(3, sizeof(uint8_t));
+    if(s_queue_asr_to_llm == NULL || s_queue_llm_to_tts == NULL || s_queue_sr_event == NULL || s_queue_sr_event_to_asr == NULL || s_queue_schedule_changed == NULL)
     {
         ESP_LOGE(TAG, "app_main: Failed to create Queue");
         return;
@@ -81,7 +96,7 @@ void app_main(void)
         return;
     }
 
-    err = sr_engine_init(&s_sr_engine, s_xQueue_sr_event);
+    err = sr_engine_init(&s_sr_engine, s_queue_sr_event);
     if(err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to init sr engine: %s", esp_err_to_name(err));
@@ -124,7 +139,7 @@ static esp_err_t app_init(void)
         ESP_LOGE(TAG, "Failed to init ASR: %s", esp_err_to_name(err));
         return err;
     }
-    err = llm_init();
+    err = llm_init(s_queue_schedule_changed);
     if (err != ESP_OK) 
     {
         ESP_LOGE(TAG, "Failed to init LLM: %s", esp_err_to_name(err));
@@ -138,6 +153,13 @@ static esp_err_t app_init(void)
         return err;
     }
     
+    err = date_init();
+    if(err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to init DATE: %s", esp_err_to_name(err));
+        return err;
+    }
+
     return ESP_OK;
 }
 
@@ -149,7 +171,7 @@ static void app_start_tasks(void)
         TASK_ASR_STACK,
         NULL,
         TASK_ASR_PRIORITY,
-        &task_asr_handle
+        &s_task_asr_handle
     );
     if (ok != pdPASS) {
         ESP_LOGE(TAG, "Failed to create ASR task");
@@ -161,7 +183,7 @@ static void app_start_tasks(void)
         TASK_LLM_STACK,
         NULL,
         TASK_LLM_PRIORITY,
-        &task_llm_handle
+        &s_task_llm_handle
     );
     if (ok != pdPASS) {
         ESP_LOGE(TAG, "Failed to create LLM task");
@@ -173,7 +195,7 @@ static void app_start_tasks(void)
         TASK_TTS_STACK,
         NULL,
         TASK_TTS_PRIORITY,
-        &task_tts_handle
+        &s_task_tts_handle
     );
     if (ok != pdPASS) {
         ESP_LOGE(TAG, "Failed to create TTS task");
@@ -185,10 +207,34 @@ static void app_start_tasks(void)
         TASK_SR_EVENT_STACK,
         NULL,
         TASK_SR_EVENT_PRIORITY,
-        &task_sr_event_handle
+        &s_task_sr_event_handle
     );
     if (ok != pdPASS) {
         ESP_LOGE(TAG, "Failed to create SR_EVENT task");
+    }
+
+    ok = xTaskCreate(
+        (TaskFunction_t)task_app_time_update,
+        "task_app_time_update",
+        TASK_APP_TIME_UPDATE_STACK,
+        NULL,
+        TASK_APP_TIME_UPDATE_PRIORITY,
+        &s_task_app_time_update_handle
+    );
+    if (ok != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create APP_TIME_UPDATE task");
+    }
+
+    ok = xTaskCreate(
+        (TaskFunction_t)task_schedule_update,
+        "task_schedule_update",
+        TASK_SCHEDULE_UPDATE_STACK,
+        NULL,
+        TASK_SCHEDULE_UPDATE_PRIORITY,
+        &s_task_schedule_update_handle
+    );
+    if (ok != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create SCHEDULE_UPDATE task");
     }
 }
 
@@ -198,7 +244,7 @@ static void task_asr(void *pvParameters)
     char *asr_buffer = NULL;
     sr_event_t sr_event_cpy;
     while (1) {
-        if(xQueueReceive(s_xQueue_sr_event_to_asr, &sr_event_cpy, portMAX_DELAY) == pdPASS)
+        if(xQueueReceive(s_queue_sr_event_to_asr, &sr_event_cpy, portMAX_DELAY) == pdPASS)
         {
             ESP_LOGI(TAG, "Start to ASR");
             asr_buffer = asr_recognize(sr_event_cpy.audio, sr_event_cpy.audio_bytes);
@@ -222,7 +268,7 @@ static void task_asr(void *pvParameters)
             else
             {
                 ESP_LOGI(TAG, "Task_asr: Recognize result: %s", asr_buffer);
-                if(xQueueSend(s_xQueue_asr_to_llm, &asr_buffer, pdMS_TO_TICKS(2000)) != pdPASS)
+                if(xQueueSend(s_queue_asr_to_llm, &asr_buffer, pdMS_TO_TICKS(2000)) != pdPASS)
                 {
                     ESP_LOGE(TAG, "Task_asr: xQueueSend error");
                     sr_engine_emit_error(&s_sr_engine, ESP_FAIL);
@@ -239,24 +285,37 @@ static void task_llm(void *pvParameters)
 {
     char *asr_buffer = NULL;
     char *llm_buffer = NULL;
+    char prompt[512];
+    date_t now;
     esp_err_t err;
     while(1)
     {
         llm_buffer = NULL;
-        if(xQueueReceive(s_xQueue_asr_to_llm, &asr_buffer, portMAX_DELAY) == pdPASS)
+        if(xQueueReceive(s_queue_asr_to_llm, &asr_buffer, portMAX_DELAY) == pdPASS)
         {
-            err = llm_chat(asr_buffer, &llm_buffer);
-            if(err != ESP_OK)
+            // 拼接当前时间+对话文本
+            if(date_get_current_time(&now) == ESP_OK)
             {
-                ESP_LOGE(TAG, "Task_llm: llm_chat error: %s", esp_err_to_name(err));
-                free(asr_buffer);
-                asr_buffer = NULL;
-                sr_engine_emit_error(&s_sr_engine, err);
-                continue;
+                snprintf(prompt, sizeof(prompt),
+                        "current_time=%04d-%02d-%02d %02d:%02d; timezone=Asia/Shanghai; user_text=%s",
+                        now.year, now.month, now.day, now.hour, now.minute, asr_buffer);
+            }
+            else
+            {
+                snprintf(prompt, sizeof(prompt),
+                        "timezone=Asia/Shanghai; user_text=%s",
+                        asr_buffer);
             }
             free(asr_buffer);
             asr_buffer = NULL;
-            if(xQueueSend(s_xQueue_llm_to_tts, &llm_buffer, pdMS_TO_TICKS(2000)) != pdPASS)
+            err = llm_chat(prompt, &llm_buffer);
+            if(err != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Task_llm: llm_chat error: %s", esp_err_to_name(err));
+                sr_engine_emit_error(&s_sr_engine, err);
+                continue;
+            }
+            if(xQueueSend(s_queue_llm_to_tts, &llm_buffer, pdMS_TO_TICKS(2000)) != pdPASS)
             {
                 ESP_LOGE(TAG, "Task_llm: xQueueSend error");
                 free(llm_buffer);
@@ -274,13 +333,22 @@ static void task_tts(void *pvParameters)
     esp_err_t err;
     while(1)
     {
-        if(xQueueReceive(s_xQueue_llm_to_tts, &llm_buffer, portMAX_DELAY) == pdPASS)
+        if(xQueueReceive(s_queue_llm_to_tts, &llm_buffer, portMAX_DELAY) == pdPASS)
         {
             ESP_LOGI(TAG, "Task_tts: Start to TTS");
+            err = app_dialogue_set_text_async(llm_buffer);
+            if(err != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Task_tts: tts_speak_text error1: %s", esp_err_to_name(err));
+                sr_engine_emit_error(&s_sr_engine, err);
+                free(llm_buffer);
+                llm_buffer = NULL;
+                continue;
+            }
             err = tts_speak_text(llm_buffer);
             if(err != ESP_OK)
             {
-                ESP_LOGE(TAG, "Task_tts: tts_speak_text error: %s", esp_err_to_name(err));
+                ESP_LOGE(TAG, "Task_tts: tts_speak_text error2: %s", esp_err_to_name(err));
                 sr_engine_emit_error(&s_sr_engine, err);
                 free(llm_buffer);
                 llm_buffer = NULL;
@@ -288,6 +356,12 @@ static void task_tts(void *pvParameters)
             }
             free(llm_buffer);
             llm_buffer = NULL;
+            vTaskDelay(pdMS_TO_TICKS(500));
+            err = app_dialogue_set_text_async("");
+            if(err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Task_tts: tts_speak_text error3: %s", esp_err_to_name(err));
+        }
         }
         err = sr_engine_start(&s_sr_engine);
         if(err != ESP_OK)
@@ -308,23 +382,23 @@ static void task_sr_event(void *pvParameters)
         {
             if(s_sr_event.type == SR_EVENT_WAKEUP)
             {
-                ESP_LOGI(TAG, "Receive SR_EVENT: WAKEUP");
+                ESP_LOGI(TAG, "TASK_SR:Receive SR_EVENT: WAKEUP");
             }
             if(s_sr_event.type == SR_EVENT_VAD_START)
             {
-                ESP_LOGI(TAG, "Receive SR_EVENT: VAD_START");
+                ESP_LOGI(TAG, "TASK_SR:Receive SR_EVENT: VAD_START");
             }
             if(s_sr_event.type == SR_EVENT_AUDIO_READY)
             {
-                ESP_LOGI(TAG, "Receive SR_EVENT: AUDIO_READY");
+                ESP_LOGI(TAG, "TASK_SR:Receive SR_EVENT: AUDIO_READY");
                 err = sr_engine_stop(&s_sr_engine);
                 if(err != ESP_OK)
                 {
                     free(s_sr_event.audio);
-                    ESP_LOGE(TAG, "Failed to stop s_sr_engine");
+                    ESP_LOGE(TAG, "TASK_SR:Failed to stop s_sr_engine");
                     continue;
                 }
-                if(xQueueSend(s_xQueue_sr_event_to_asr, &s_sr_event, portMAX_DELAY) != pdPASS)
+                if(xQueueSend(s_queue_sr_event_to_asr, &s_sr_event, portMAX_DELAY) != pdPASS)
                 {
                     free(s_sr_event.audio);
                     sr_engine_emit_error(&s_sr_engine, ESP_FAIL);
@@ -335,25 +409,78 @@ static void task_sr_event(void *pvParameters)
                 free(s_sr_event.audio);
                 s_sr_event.audio = NULL;
 
-                ESP_LOGE(TAG, "Receive SR_ERROR: %s", esp_err_to_name(s_sr_event.error_code));
+                ESP_LOGE(TAG, "TASK_SR:Receive SR_ERROR: %s", esp_err_to_name(s_sr_event.error_code));
                 err = sr_engine_stop(&s_sr_engine);
                 if(err != ESP_OK)
                 {
-                    ESP_LOGE(TAG, "Failed to stop s_sr_engine: %s", esp_err_to_name(err));
+                    ESP_LOGE(TAG, "TASK_SR:Failed to stop s_sr_engine: %s", esp_err_to_name(err));
                 }
 
                 err = sr_engine_reset_session(&s_sr_engine);
                 if(err != ESP_OK)
                 {
-                    ESP_LOGE(TAG, "Failed to reset s_sr_engine_session: %s", esp_err_to_name(err));
+                    ESP_LOGE(TAG, "TASK_SR:Failed to reset s_sr_engine_session: %s", esp_err_to_name(err));
                 }
 
                 err = sr_engine_start(&s_sr_engine);
                 if(err != ESP_OK)
                 {
-                    ESP_LOGE(TAG, "Failed to restart engine: %s", esp_err_to_name(err));
+                    ESP_LOGE(TAG, "TASK_SR:Failed to restart engine: %s", esp_err_to_name(err));
                 }
             }
+        }
+    }
+}
+
+// APP_TIME_UPDATE 任务：每500ms刷新一次本地时间,每60s获取一次网络时间
+static void task_app_time_update(void *pvParameters)
+{
+    date_t date;
+
+    while(1)
+    {
+        for(uint8_t i = 0; i < 120; i++)
+        {
+            if(date_get_current_time(&date) == ESP_OK)
+            {
+                app_time_update_async(date.year, date.month, date.day, date.hour, date.minute);
+            }
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+
+
+        if (date_get_time() != ESP_OK)
+        {
+            ESP_LOGW(TAG, "TASK_APP_TIME_UPDATE: Failed to refresh network time");
+        }
+    }
+}
+
+// SCHEDULE_UPDATE 任务：刷新日程区
+static void task_schedule_update(void *pvParameters)
+{
+    uint8_t changed;
+
+    while(1)
+    {
+        if(xQueueReceive(s_queue_schedule_changed, &changed, portMAX_DELAY) == pdPASS)
+        {
+            schedule_ctx_t items[2];
+            voxtomat_schedule_item_t ui_items[2];
+
+            uint8_t count = schedule_copy_items(items, 2);
+
+            for(uint8_t n = 0; n < count; n++)
+            {
+                ui_items[n].year = items[n].year;
+                ui_items[n].month = items[n].month;
+                ui_items[n].day = items[n].day;
+                ui_items[n].hour = items[n].hour;
+                ui_items[n].minute = items[n].minute;
+                snprintf(ui_items[n].text, sizeof(ui_items[n].text),
+                         "%s", items[n].text);
+            }
+            app_schedule_update_async(ui_items, count);
         }
     }
 }

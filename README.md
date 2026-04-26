@@ -85,28 +85,64 @@
 
 ```text
 VoxTomat
-├─ main
-│  ├─ main.c                     # 应用入口、任务创建、队列组织
-├─ components
-│  ├─ BSP
-│  │  └─ I2S
-│  │     ├─ i2s.c                # MIC/SPK 初始化与读写
-│  │     └─ i2s.h
-│  └─ Middlewares
-│     ├─ WIFI
-│     │  ├─ wifi.c               # STA 初始化、连接、事件处理
-│     │  └─ wifi.h
-│     ├─ ASR
-│     │  ├─ asr.c                # 百度 ASR token 获取、录音、识别
-│     │  └─ asr.h
-│     ├─ TTS
-│     │  ├─ tts.c                # 豆包 TTS 流式解析、解码、播放
-│     │  └─ tts.h
-│     ├─ project_secrets.h       # 本地私有配置（已忽略）
-│     └─ project_secrets.h.example
-├─ CMakeLists.txt
-├─ dependencies.lock
-└─ partitions-16MiB.csv
+├── main
+│   └── main.c                           # 应用入口；系统初始化；任务创建；语音/界面流程编排
+├── components
+│   ├── BSP
+│   │   ├── I2S
+│   │   │   ├── i2s.c                    # 麦克风/扬声器 I2S 驱动封装
+│   │   │   └── i2s.h
+│   │   ├── SPI
+│   │   │   ├── spi.c                    # SPI 总线初始化
+│   │   │   └── spi.h
+│   │   ├── LCD
+│   │   │   ├── lcd.c                    # LCD 面板初始化
+│   │   │   └── lcd.h
+│   │   ├── LV_DRIVER
+│   │   │   ├── lvgl_port.c              # LVGL 任务与端口初始化
+│   │   │   ├── lvgl_port.h
+│   │   │   ├── lv_port_disp.c           # LVGL 显示驱动绑定
+│   │   │   └── lv_port_disp.h
+│   │   └── UI
+│   │       ├── app.c                    # UI 异步更新封装；番茄钟/时间/日程/对话区接口
+│   │       ├── app.h
+│   │       ├── voxtomat.c               # 主界面组件创建与显示刷新
+│   │       ├── voxtomat.h
+│   │       ├── gradient_text.c          # 渐变倒计时文本组件
+│   │       ├── gradient_text.h
+│   │       └── *.c                      # 字体资源
+│   └── Middlewares
+│       ├── WIFI
+│       │   ├── wifi.c                   # STA 初始化、连接、事件处理
+│       │   └── wifi.h
+│       ├── DATE
+│       │   ├── date.c                   # 网络时间获取、本地时间基准维护与推算
+│       │   └── date.h
+│       ├── SCHEDULE
+│       │   ├── schedule.c               # 日程增删、排序、复制
+│       │   └── schedule.h
+│       ├── ASR
+│       │   ├── asr.c                    # 百度 ASR token 获取与语音识别
+│       │   └── asr.h
+│       ├── TTS
+│       │   ├── tts.c                    # 豆包 TTS 流式解析、解码、播放
+│       │   └── tts.h
+│       ├── LLM
+│       │   ├── llm.c                    # DeepSeek 请求构建、JSON 解析、指令分发
+│       │   └── llm.h
+│       ├── SR
+│       │   ├── sr_engine.c              # ESP-SR feed/fetch 任务与事件流转
+│       │   ├── sr_engine.h
+│       │   ├── sr_model.c               # 唤醒词/VAD/AFE 模型初始化
+│       │   ├── sr_model.h
+│       │   ├── sr_session.c             # 单次语音会话缓存管理
+│       │   ├── sr_session.h
+│       │   └── sr_event.h               # SR 事件定义
+│       ├── project_secrets.h            # 本地私有配置（已忽略）
+│       └── project_secrets.h.example
+├── CMakeLists.txt
+├── dependencies.lock
+└── partitions-16MiB.csv
 ```
 
 ## 系统架构设计

@@ -1,5 +1,5 @@
-﻿#ifndef __TTS_H_
-#define __TTS_H_
+﻿#ifndef TTS_H_
+#define TTS_H_
 
 #include "esp_err.h"
 #include "project_secrets.h"
@@ -33,8 +33,8 @@
 #define TTS_CHANNELS          1
 #define TTS_BITS_PER_SAMPLE   16
 #define TTS_MAX_TEXT_BYTES    1024
-#define TTS_SPEECH_RATE       1.2
-#define TTS_LOUDNESS_RATE     -20
+#define TTS_SPEECH_RATE       20
+#define TTS_LOUDNESS_RATE     -10
 
 
 
