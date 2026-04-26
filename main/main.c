@@ -30,7 +30,7 @@ static QueueHandle_t s_queue_sr_event_to_asr;
 static QueueHandle_t s_queue_schedule_changed;
 
 // 任务 ASR 配置
-#define TASK_ASR_STACK 8192
+#define TASK_ASR_STACK 12288
 #define TASK_ASR_PRIORITY 1
 static TaskHandle_t s_task_asr_handle = NULL;
 static void task_asr(void *pvParameters);
@@ -50,7 +50,7 @@ static void task_tts(void *pvParameters);
 // 任务 SR配置存放在sr_engine中
 
 // 任务 SR_EVENT 配置
-#define TASK_SR_EVENT_STACK 2048
+#define TASK_SR_EVENT_STACK 4096
 #define TASK_SR_EVENT_PRIORITY 1
 static TaskHandle_t s_task_sr_event_handle = NULL;
 static void task_sr_event(void *pvParameters);
@@ -246,6 +246,13 @@ static void task_asr(void *pvParameters)
     while (1) {
         if(xQueueReceive(s_queue_sr_event_to_asr, &sr_event_cpy, portMAX_DELAY) == pdPASS)
         {
+            ESP_LOGD(TAG, "ASR hw=%u", (unsigned)uxTaskGetStackHighWaterMark(s_task_asr_handle));
+            ESP_LOGD(TAG, "LLM hw=%u", (unsigned)uxTaskGetStackHighWaterMark(s_task_llm_handle));
+            ESP_LOGD(TAG, "TTS hw=%u", (unsigned)uxTaskGetStackHighWaterMark(s_task_tts_handle));
+            ESP_LOGD(TAG, "SR EVENT hw=%u", (unsigned)uxTaskGetStackHighWaterMark(s_task_sr_event_handle));
+            ESP_LOGD(TAG, "APP TIME UPDATE hw=%u", (unsigned)uxTaskGetStackHighWaterMark(s_task_app_time_update_handle));
+            ESP_LOGD(TAG, "SCHEDULE UPDATE hw=%u", (unsigned)uxTaskGetStackHighWaterMark(s_task_schedule_update_handle));
+            
             ESP_LOGI(TAG, "Start to ASR");
             asr_buffer = asr_recognize(sr_event_cpy.audio, sr_event_cpy.audio_bytes);
             sr_engine_reset_session(&s_sr_engine);

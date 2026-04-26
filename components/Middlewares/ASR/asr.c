@@ -14,6 +14,12 @@ static char *s_access_token = NULL;
 // 从 HTTP 客户端读取完整响应体到动态分配的缓冲区
 static esp_err_t asr_http_read(esp_http_client_handle_t http_client, char **buffer, int content_length)
 {
+    if (buffer == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *buffer = NULL;
     // content_length 为 0 时不一定没数据，可能只是服务端没带长度
     int buffer_size = (content_length > 0 ) ? content_length + 1 : 4096;
     *buffer = malloc(buffer_size);
@@ -30,6 +36,7 @@ static esp_err_t asr_http_read(esp_http_client_handle_t http_client, char **buff
         if(current_read < 0)
         {
             free(*buffer);
+            *buffer = NULL;
             ESP_LOGE(TAG, "Failed to read http data");
             return ESP_FAIL;
         }

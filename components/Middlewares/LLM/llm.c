@@ -108,7 +108,7 @@ static esp_err_t llm_build_request_body(const char *text_in, char **out_body)
         ESP_LOGE(TAG, "Failed to build cJSON Object: NO MEM");
         return ESP_ERR_NO_MEM;
     }
-    cJSON_AddStringToObject(root, "model", "deepseek-chat");
+    cJSON_AddStringToObject(root, "model", "deepseek-v4-pro");
     cJSON_AddFalseToObject(root, "stream");
     cJSON_AddNumberToObject(root, "max_tokens", 512);
     cJSON_AddNumberToObject(root, "temperature", 0.1);
