@@ -231,7 +231,11 @@ flowchart LR
 
 ## 仓库使用说明
 
-### 1. 本地私有配置
+### 1. 特殊说明
+
+移植 LVGL 模块后，系统运行压力上升，使用 JTAG 方式烧录时可能会与 OpenOCD 的运行冲突导致烧录失败，推荐使用 UART 方式烧录
+
+### 2. 本地私有配置
 
 首次拉取仓库后，请先复制：
 
@@ -247,12 +251,12 @@ components/Middlewares/project_secrets.h
 
 然后填写本地 `Wi-Fi / 百度 ASR / 豆包 TTS` 配置。
 
-### 2. 编译环境
+### 3. 编译环境
 
 - `ESP-IDF`
 - 目标芯片：`esp32s3`
 
-### 3. 编译与烧录
+### 4. 编译与烧录
 
 ```bash
 idf.py set-target esp32s3
