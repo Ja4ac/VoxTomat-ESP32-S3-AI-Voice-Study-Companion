@@ -264,6 +264,9 @@ static void voxtomat_schedule_area_components_create(lv_obj_t *parent)
     lv_obj_set_style_pad_all(divider, 0, LV_PART_MAIN);
 
     s_schedule_label2 = lv_label_create(container);
+
+    lv_label_set_text(s_schedule_label1, "暂无日程");
+    lv_label_set_text(s_schedule_label2, "");
 }
 
 // 对话区组件配置

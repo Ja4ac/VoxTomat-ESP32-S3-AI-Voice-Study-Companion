@@ -43,7 +43,7 @@ static uint8_t *s_tts_pcm_storage = NULL;
 #define TTS_SOFT_GAIN_DEN      1          // 软件音量放大倍数分母。
 
 // 任务 TTS_PLAY 配置
-#define TASK_TTS_PLAY_STACK 8192
+#define TASK_TTS_PLAY_STACK 20480
 #define TASK_TTS_PLAY_PRIORITY 2
 static TaskHandle_t task_tts_play_handle = NULL;
 static void task_tts_play(void *pvParameters);
@@ -537,7 +537,7 @@ esp_err_t tts_init(void)
 
     if (s_tts_pcm_storage == NULL)
     {
-        s_tts_pcm_storage = heap_caps_malloc(PCM_COPY_BUFFER_CAPACITY,
+        s_tts_pcm_storage = heap_caps_malloc(PCM_COPY_BUFFER_CAPACITY + 1,
                                     MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (s_tts_pcm_storage == NULL)
         {
@@ -764,7 +764,7 @@ cleanup:
     
     if(request_body != NULL)
     {
-        cJSON_free(request_body);
+        free(request_body);
         request_body = NULL;
     }
     if (http_client != NULL) 

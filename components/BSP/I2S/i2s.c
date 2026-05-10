@@ -6,6 +6,8 @@
 #include "esp_log.h"
 #include "esp_err.h"
 
+
+static int32_t stereo_buf[I2S_MIC_MAX_SAMPLES_PER_READ * 2];  // 8KB, BSS段
 static const char *TAG = "I2S";
 static i2s_chan_handle_t s_i2s_mic_chan = NULL;
 static i2s_chan_handle_t s_i2s_spk_chan = NULL;
@@ -72,21 +74,19 @@ size_t i2s_mic_read(int16_t *data, size_t sample_count)
         ESP_LOGE(TAG, "Failed to read mic, reason: I2S has not initialized");
         return 0;
     }
-    // 先收原始stereo32bit数据
-    size_t stereo_bytes = sample_count * 2 * sizeof(int32_t);
-    int32_t *stereo_buf = malloc(stereo_bytes);
-    if(stereo_buf == NULL)
+
+    if (sample_count > I2S_MIC_MAX_SAMPLES_PER_READ) 
     {
-        ESP_LOGE(TAG, "Failed to allocate stereo buffer");
-        return 0;
+      sample_count = I2S_MIC_MAX_SAMPLES_PER_READ;
     }
+    // 计算 stereo_bytes（sample_count 可能已被截断）
+    size_t stereo_bytes = sample_count * 2 * sizeof(int32_t);
 
     size_t bytes_read;
     esp_err_t err = i2s_channel_read(s_i2s_mic_chan, (void*)stereo_buf, stereo_bytes, &bytes_read, pdMS_TO_TICKS(100));
     if(err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to read data: %s", esp_err_to_name(err));
-        free(stereo_buf);
         return 0;
     }   
 
@@ -102,7 +102,6 @@ size_t i2s_mic_read(int16_t *data, size_t sample_count)
         data[count++] = (int16_t)(left_channel_slot >> 16);
     }
 
-    free(stereo_buf);
     return count;
 }
 

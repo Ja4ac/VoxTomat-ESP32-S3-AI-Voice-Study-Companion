@@ -10,7 +10,7 @@
 #include "lvgl.h"
 
 #define LVGL_TICK_PERIOD_MS 5
-#define LVGL_TASK_STACK     6144
+#define LVGL_TASK_STACK     10240
 #define LVGL_TASK_PRIORITY  2
 #define LVGL_TASK_MIN_DELAY 10
 #define LVGL_TASK_MAX_DELAY 100

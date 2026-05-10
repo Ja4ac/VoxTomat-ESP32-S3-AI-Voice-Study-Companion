@@ -87,6 +87,9 @@ static void sr_handle_fetch_result(sr_engine_t *engine, const afe_fetch_result_t
             engine->recording = false;
             sr_session_reset(&engine->session);
 
+            // 关闭WakeNet，防止超时重置管道干扰VAD
+            engine->model.afe_handle->disable_wakenet(engine->model.afe_data);
+
             // 发送唤醒事件
             sr_event_reset(&event);
             event.type = SR_EVENT_WAKEUP;
@@ -385,6 +388,8 @@ esp_err_t sr_engine_reset_session(sr_engine_t *engine)
     {
         engine->model.afe_handle->reset_buffer(engine->model.afe_data);
         engine->model.afe_handle->reset_vad(engine->model.afe_data);
+        // 重新打开WakeNet，恢复下一次唤醒词检测
+        engine->model.afe_handle->enable_wakenet(engine->model.afe_data);
     }
 
     return ESP_OK;

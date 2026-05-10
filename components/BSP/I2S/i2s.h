@@ -19,6 +19,8 @@
 #define I2S_SPK_DIN    GPIO_NUM_16
 #define I2S_SPK_SD     GPIO_NUM_8
 
+#define I2S_MIC_MAX_SAMPLES_PER_READ    1024
+
 esp_err_t i2s_mic_init(void);
 size_t i2s_mic_read(int16_t *data, size_t sample_count);
 esp_err_t i2s_mic_deinit(void);

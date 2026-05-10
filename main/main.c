@@ -30,19 +30,19 @@ static QueueHandle_t s_queue_sr_event_to_asr;
 static QueueHandle_t s_queue_schedule_changed;
 
 // 任务 ASR 配置
-#define TASK_ASR_STACK 12288
+#define TASK_ASR_STACK 20480
 #define TASK_ASR_PRIORITY 1
 static TaskHandle_t s_task_asr_handle = NULL;
 static void task_asr(void *pvParameters);
 
 // 任务 LLM 配置
-#define TASK_LLM_STACK 8192
+#define TASK_LLM_STACK 12288
 #define TASK_LLM_PRIORITY 1
 static TaskHandle_t s_task_llm_handle = NULL;
 static void task_llm(void *pvParameters);
 
 // 任务 TTS 配置
-#define TASK_TTS_STACK 12288
+#define TASK_TTS_STACK 20480
 #define TASK_TTS_PRIORITY 1
 static TaskHandle_t s_task_tts_handle = NULL;
 static void task_tts(void *pvParameters);

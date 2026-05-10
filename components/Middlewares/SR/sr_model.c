@@ -64,7 +64,7 @@ esp_err_t sr_model_init(sr_model_ctx_t *ctx)
     ctx->afe_config->vad_init = true;
     ctx->afe_config->vad_mode = VAD_MODE_3;                             // VAD工作模式（等级3，灵敏度/稳定性均衡）
     ctx->afe_config->vad_min_speech_ms = 200;                           // VAD最小语音时长：判定为有效语音的最短时间
-    ctx->afe_config->vad_min_noise_ms = 1200;                            // VAD最小静音时长：判定为结束说话的最短时间
+    ctx->afe_config->vad_min_noise_ms = 2000;                            // VAD最小静音时长：判定为结束说话的最短时间
     ctx->afe_config->vad_delay_ms = 200;                                // VAD检测延迟时间
 
     // 校验AFE配置参数合法性，自动修正错误配置
